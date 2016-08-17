@@ -81,8 +81,8 @@ func (p *Parameter) BindValue(h api.SQLHSTMT, idx int, v driver.Value) error {
 		}
 	case int64:
 		ctype = api.SQL_C_SBIGINT
+		p.Data = &d
 		buf = unsafe.Pointer(&d)
-		p.Data = *(*int64)(buf)
 		sqltype = api.SQL_BIGINT
 		size = 8
 	case bool:
