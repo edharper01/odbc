@@ -1393,6 +1393,51 @@ select @ret
 	exec(t, db, `drop procedure dbo.temp`)
 }
 
+func TestMSSQLExecStoredProcedureOutputParams(t *testing.T) {
+	db, sc, err := mssqlConnect()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeDB(t, db, sc, sc)
+
+	db.Exec("drop procedure dbo.temp")
+	exec(t, db, `
+create procedure dbo.temp
+	@a	int,
+	@b	int OUTPUT
+as
+begin
+	SET @b = @a + @a
+	SELECT @a - @a AS resultset
+end
+`)
+	stmt, err := db.Prepare("exec dbo.temp @a = ?, @b = ?out")
+	var resultset,outputParam int64
+	outputParam = 10
+	rows, err := stmt.Query(2, &outputParam)
+    if err != nil {
+        t.Fatal(err)
+    }	
+	defer rows.Close()
+	for rows.Next() {
+		err = rows.Scan(&resultset)
+		if err != nil {
+			t.Fatal(err)
+		}			
+	}
+	err = rows.Err()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resultset != 0 {
+		t.Fatalf("unexpected return value: should=0, is=%v", resultset)
+	}
+	if outputParam != 4 {
+		t.Fatalf("unexpected output parameter value: should=4, is=%v", outputParam)
+	}	
+	exec(t, db, `drop procedure dbo.temp`)
+}
+
 func TestMSSQLSingleCharParam(t *testing.T) {
 	db, sc, err := mssqlConnect()
 	if err != nil {

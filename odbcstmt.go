@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 	"unsafe"
-
+"log"
 	"github.com/alexbrainman/odbc/api"
 )
 
@@ -35,14 +35,17 @@ func (c *Conn) PrepareODBCStmt(query string) (*ODBCStmt, error) {
 	}
 	h := api.SQLHSTMT(out)
 	drv.Stats.updateHandleCount(api.SQL_HANDLE_STMT, 1)
-
+log.Println("before query", query)	
+	query, paramDirections := ExtractParameterDirection(query)
+log.Println("after query", query)	
+log.Println("param dirs", paramDirections)	
 	b := api.StringToUTF16(query)
 	ret = api.SQLPrepare(h, (*api.SQLWCHAR)(unsafe.Pointer(&b[0])), api.SQL_NTS)
 	if IsError(ret) {
 		defer releaseHandle(h)
 		return nil, c.newError("SQLPrepare", h)
 	}
-	ps, err := ExtractParameters(h)
+	ps, err := ExtractParameters(h, paramDirections)
 	if err != nil {
 		defer releaseHandle(h)
 		return nil, err
@@ -112,6 +115,7 @@ func (s *ODBCStmt) Exec(args []driver.Value) error {
 	ret := api.SQLExecute(s.h)
 	if ret == api.SQL_NO_DATA {
 		// success but no data to report
+		log.Println("NO DATA TO REPORT")
 		return nil
 	}
 	if IsError(ret) {

@@ -7,8 +7,11 @@ package odbc
 import (
 	"database/sql/driver"
 	"fmt"
+	"strings"
 	"time"
 	"unsafe"
+	"regexp"
+	"log"
 
 	"github.com/alexbrainman/odbc/api"
 )
@@ -22,6 +25,8 @@ type Parameter struct {
 	// The fields keep data alive and away from gc.
 	Data             interface{}
 	StrLen_or_IndPtr api.SQLLEN
+	// TODO
+	Direction api.SQLSMALLINT
 }
 
 // StoreStrLen_or_IndPtr stores v into StrLen_or_IndPtr field of p
@@ -76,8 +81,8 @@ func (p *Parameter) BindValue(h api.SQLHSTMT, idx int, v driver.Value) error {
 		}
 	case int64:
 		ctype = api.SQL_C_SBIGINT
-		p.Data = &d
 		buf = unsafe.Pointer(&d)
+		p.Data = *(*int64)(buf)
 		sqltype = api.SQL_BIGINT
 		size = 8
 	case bool:
@@ -141,8 +146,10 @@ func (p *Parameter) BindValue(h api.SQLHSTMT, idx int, v driver.Value) error {
 	default:
 		panic(fmt.Errorf("unsupported type %T", v))
 	}
+log.Println("Binding param ", idx, " with direction ", p.Direction)
+
 	ret := api.SQLBindParameter(h, api.SQLUSMALLINT(idx+1),
-		api.SQL_PARAM_INPUT, ctype, sqltype, size, decimal,
+		p.Direction, ctype, sqltype, size, decimal,
 		api.SQLPOINTER(buf), buflen, plen)
 	if IsError(ret) {
 		return NewError("SQLBindParameter", h)
@@ -150,7 +157,7 @@ func (p *Parameter) BindValue(h api.SQLHSTMT, idx int, v driver.Value) error {
 	return nil
 }
 
-func ExtractParameters(h api.SQLHSTMT) ([]Parameter, error) {
+func ExtractParameters(h api.SQLHSTMT, paramDirections []api.SQLSMALLINT) ([]Parameter, error) {
 	// count parameters
 	var n, nullable api.SQLSMALLINT
 	ret := api.SQLNumParams(h, &n)
@@ -161,6 +168,11 @@ func ExtractParameters(h api.SQLHSTMT) ([]Parameter, error) {
 		// no parameters
 		return nil, nil
 	}
+
+	if int(n) != len(paramDirections) {
+		return nil, fmt.Errorf("mismatch between total parameters and total parameter directions")
+	}
+
 	ps := make([]Parameter, n)
 	// fetch param descriptions
 	for i := range ps {
@@ -186,6 +198,35 @@ func ExtractParameters(h api.SQLHSTMT) ([]Parameter, error) {
 					p.SQLType = api.SQL_WLONGVARCHAR
 			}
 		}
+		p.Direction = paramDirections[i]
 	}
 	return ps, nil
+}
+
+const (
+	parameterInput string = "?in"
+	parameterOutput string = "?out"
+)
+var rxParameterDirection = regexp.MustCompile(`(\?)\B|(\?in)\b|(\?out)`)
+
+func ExtractParameterDirection(query string) (string, []api.SQLSMALLINT) {
+	found := rxParameterDirection.FindAllString(query, -1)
+	if len(found) == 0 {
+		return query, nil
+	}
+
+	paramDirs := make([]api.SQLSMALLINT, len(found))
+	for i, f := range found {
+		switch f{
+			case parameterOutput:
+				paramDirs[i] = api.SQL_PARAM_OUTPUT
+			default: 
+				paramDirs[i] = api.SQL_PARAM_INPUT
+		}
+	}
+
+	query = strings.Replace(query, parameterOutput, "?", -1)
+	query = strings.Replace(query, parameterInput, "?", -1)
+
+	return query, paramDirs
 }
