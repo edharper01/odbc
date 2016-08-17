@@ -1413,7 +1413,6 @@ end
 `)
 	stmt, err := db.Prepare("exec dbo.temp @a = ?, @b = ?out")
 	var resultset,outputParam int64
-	outputParam = 1
 	rows, err := stmt.Query(2, &outputParam)
     if err != nil {
         t.Fatal(err)
