@@ -7,11 +7,11 @@ package odbc
 import (
 	"database/sql/driver"
 	"fmt"
+	"log"
+	"regexp"
 	"strings"
 	"time"
 	"unsafe"
-	"regexp"
-	"log"
 
 	"github.com/alexbrainman/odbc/api"
 )
@@ -146,7 +146,7 @@ func (p *Parameter) BindValue(h api.SQLHSTMT, idx int, v driver.Value) error {
 	default:
 		panic(fmt.Errorf("unsupported type %T", v))
 	}
-log.Println("Binding param ", idx, " with direction ", p.Direction)
+	log.Println("Binding param ", idx, " with direction ", p.Direction)
 
 	ret := api.SQLBindParameter(h, api.SQLUSMALLINT(idx+1),
 		p.Direction, ctype, sqltype, size, decimal,
@@ -186,16 +186,16 @@ func ExtractParameters(h api.SQLHSTMT, paramDirections []api.SQLSMALLINT) ([]Par
 			continue
 		}
 		p.isDescribed = true
-		// SQL Server MAX types (varchar(max), nvarchar(max), 
+		// SQL Server MAX types (varchar(max), nvarchar(max),
 		// varbinary(max) are identified by size = 0
 		if p.Size == 0 {
 			switch p.SQLType {
-				case api.SQL_VARBINARY:
-					p.SQLType = api.SQL_LONGVARBINARY
-				case api.SQL_VARCHAR:
-					p.SQLType = api.SQL_LONGVARCHAR
-				case api.SQL_WVARCHAR:
-					p.SQLType = api.SQL_WLONGVARCHAR
+			case api.SQL_VARBINARY:
+				p.SQLType = api.SQL_LONGVARBINARY
+			case api.SQL_VARCHAR:
+				p.SQLType = api.SQL_LONGVARCHAR
+			case api.SQL_WVARCHAR:
+				p.SQLType = api.SQL_WLONGVARCHAR
 			}
 		}
 		p.Direction = paramDirections[i]
@@ -204,9 +204,10 @@ func ExtractParameters(h api.SQLHSTMT, paramDirections []api.SQLSMALLINT) ([]Par
 }
 
 const (
-	parameterInput string = "?in"
+	parameterInput  string = "?in"
 	parameterOutput string = "?out"
 )
+
 var rxParameterDirection = regexp.MustCompile(`(\?)\B|(\?in)\b|(\?out)`)
 
 func ExtractParameterDirection(query string) (string, []api.SQLSMALLINT) {
@@ -217,11 +218,11 @@ func ExtractParameterDirection(query string) (string, []api.SQLSMALLINT) {
 
 	paramDirs := make([]api.SQLSMALLINT, len(found))
 	for i, f := range found {
-		switch f{
-			case parameterOutput:
-				paramDirs[i] = api.SQL_PARAM_OUTPUT
-			default: 
-				paramDirs[i] = api.SQL_PARAM_INPUT
+		switch f {
+		case parameterOutput:
+			paramDirs[i] = api.SQL_PARAM_OUTPUT
+		default:
+			paramDirs[i] = api.SQL_PARAM_INPUT
 		}
 	}
 
