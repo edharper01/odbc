@@ -7,7 +7,7 @@ package odbc
 import (
 	"database/sql/driver"
 	"fmt"
-	"log"
+	//"log"
 	"regexp"
 	"strings"
 	"time"
@@ -45,6 +45,7 @@ func (p *Parameter) BindValue(h api.SQLHSTMT, idx int, v driver.Value) error {
 	var buflen api.SQLLEN
 	var plen *api.SQLLEN
 	var buf unsafe.Pointer
+	
 	switch d := v.(type) {
 	case nil:
 		ctype = api.SQL_C_WCHAR
@@ -81,8 +82,8 @@ func (p *Parameter) BindValue(h api.SQLHSTMT, idx int, v driver.Value) error {
 		}
 	case int64:
 		ctype = api.SQL_C_SBIGINT
-		p.Data = &d
 		buf = unsafe.Pointer(&d)
+		p.Data = buf
 		sqltype = api.SQL_BIGINT
 		size = 8
 	case bool:
@@ -146,7 +147,7 @@ func (p *Parameter) BindValue(h api.SQLHSTMT, idx int, v driver.Value) error {
 	default:
 		panic(fmt.Errorf("unsupported type %T", v))
 	}
-	log.Println("Binding param ", idx, " with direction ", p.Direction)
+//log.Println("Binding param ", idx, " with direction ", p.Direction)
 
 	ret := api.SQLBindParameter(h, api.SQLUSMALLINT(idx+1),
 		p.Direction, ctype, sqltype, size, decimal,

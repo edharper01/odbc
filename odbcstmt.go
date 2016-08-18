@@ -35,10 +35,10 @@ func (c *Conn) PrepareODBCStmt(query string) (*ODBCStmt, error) {
 	}
 	h := api.SQLHSTMT(out)
 	drv.Stats.updateHandleCount(api.SQL_HANDLE_STMT, 1)
-log.Println("before query", query)	
+//log.Println("before query", query)	
 	query, paramDirections := ExtractParameterDirection(query)
-log.Println("after query", query)	
-log.Println("param dirs", paramDirections)	
+//log.Println("after query", query)	
+//log.Println("param dirs", paramDirections)	
 	b := api.StringToUTF16(query)
 	ret = api.SQLPrepare(h, (*api.SQLWCHAR)(unsafe.Pointer(&b[0])), api.SQL_NTS)
 	if IsError(ret) {
@@ -118,6 +118,21 @@ func (s *ODBCStmt) Exec(args []driver.Value) error {
 		log.Println("NO DATA TO REPORT")
 		return nil
 	}
+	
+	//ejh debug
+	for i := range s.Parameters {	
+		p := (*int64)(s.Parameters[i].Data.(unsafe.Pointer))
+		old := args[i]
+		args[i] = *p
+		log.Println("parameter:",i, "has value", args[i],"but it used to have value",old)
+	}
+	
+	//~ for i, a := range args {
+		//~ log.Println("args:",i,"is",a)
+	//~ }
+	
+	// end debug
+	
 	if IsError(ret) {
 		return NewError("SQLExecute", s.h)
 	}
