@@ -120,11 +120,13 @@ func (s *ODBCStmt) Exec(args []driver.Value) error {
 	}
 	
 	//ejh debug
-	for i := range s.Parameters {	
-		p := (*int64)(s.Parameters[i].Data.(unsafe.Pointer))
-		old := args[i]
-		args[i] = *p
-		log.Println("parameter:",i, "has value", args[i],"but it used to have value",old)
+	for i, pm := range s.Parameters {	
+		if pm.Direction == api.SQL_PARAM_OUTPUT {
+			p := (*int64)(s.Parameters[i].Data.(unsafe.Pointer))
+			old := args[i]
+			args[i] = *p
+			log.Println("parameter:",i, "has value", args[i],"but it used to have value",old)
+		}
 	}
 	
 	//~ for i, a := range args {
