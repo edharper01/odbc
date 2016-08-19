@@ -139,9 +139,10 @@ func closeDB(t *testing.T, db *sql.DB, shouldStmtCount, ignoreIfStmtCount int) {
 }
 
 // as per http://www.mssqltips.com/sqlservertip/2198/determine-which-version-of-sql-server-data-access-driver-is-used-by-an-application/
+// note that the SQL Server login running the tests must have the VIEW SERVER STATE permission for this chech
 func connProtoVersion(db *sql.DB) ([]byte, error) {
 	var p []byte
-	if err := db.QueryRow("select cast(protocol_version as binary(4)) from master.sys.dm_exec_connections where session_id = @@spid").Scan(&p); err != nil {
+	if err := db.QueryRow("select cast(protocol_version as varbinary(4)) AS p from master.sys.dm_exec_connections where session_id = @@spid").Scan(&p); err != nil {
 		return nil, err
 	}
 	if len(p) != 4 {
@@ -159,43 +160,19 @@ func isProto2008OrLater(db *sql.DB) (bool, error) {
 	return p[0] >= 0x73, nil
 }
 
-// as per http://www.mssqltips.com/sqlservertip/2563/understanding-the-sql-server-select-version-command/
-func serverVersion(db *sql.DB) (sqlVersion, sqlPartNumber, osVersion string, err error) {
-	var v string
-	if err = db.QueryRow("select @@version").Scan(&v); err != nil {
-		return "", "", "", err
+func serverPartNumber(db *sql.DB) (sqlPartNumber string, err error) {
+	var pv string
+	if err = db.QueryRow("SELECT CAST(SERVERPROPERTY('productversion') AS varchar(50)) as pv").Scan(&pv); err != nil {
+		return "", err
 	}
-	a := strings.SplitN(v, "\n", -1)
-	if len(a) < 4 {
-		return "", "", "", errors.New("SQL Server version string must have at least 4 lines: " + v)
-	}
-	for i := range a {
-		a[i] = strings.Trim(a[i], " \t")
-	}
-	l1 := strings.SplitN(a[0], "-", -1)
-	if len(l1) != 2 {
-		return "", "", "", errors.New("SQL Server version first line must have - in it: " + v)
-	}
-	i := strings.Index(a[3], " on ")
-	if i < 0 {
-		return "", "", "", errors.New("SQL Server version fourth line must have 'on' in it: " + v)
-	}
-	sqlVersion = l1[0] + a[3][:i]
-	osVersion = a[3][i+4:]
-	sqlPartNumber = strings.Trim(l1[1], " ")
-	l12 := strings.SplitN(sqlPartNumber, " ", -1)
-	if len(l12) < 2 {
-		return "", "", "", errors.New("SQL Server version first line must have space after part number in it: " + v)
-	}
-	sqlPartNumber = l12[0]
-	return sqlVersion, sqlPartNumber, osVersion, nil
+	return pv, nil
 }
 
-// as per http://www.mssqltips.com/sqlservertip/2563/understanding-the-sql-server-select-version-command/
 func isSrv2008OrLater(db *sql.DB) (bool, error) {
-	_, sqlPartNumber, _, err := serverVersion(db)
+	//_, sqlPartNumber, _, err := serverVersion(db)
+	sqlPartNumber, err := serverPartNumber(db)
 	if err != nil {
-		return false, err
+		return false, errors.New("part number not found")
 	}
 	a := strings.SplitN(sqlPartNumber, ".", -1)
 	if len(a) != 4 {
