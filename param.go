@@ -27,6 +27,7 @@ type Parameter struct {
 	StrLen_or_IndPtr api.SQLLEN
 	// TODO
 	Direction api.SQLSMALLINT
+	val			driver.Value
 }
 
 // StoreStrLen_or_IndPtr stores v into StrLen_or_IndPtr field of p
@@ -86,6 +87,7 @@ func (p *Parameter) BindValue(h api.SQLHSTMT, idx int, v driver.Value) error {
 		p.Data = buf
 		sqltype = api.SQL_BIGINT
 		size = 8
+		p.val = d
 	case bool:
 		var b byte
 		if d {
