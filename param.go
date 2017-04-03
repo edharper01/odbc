@@ -97,28 +97,22 @@ func (p *Parameter) BindValue(h api.SQLHSTMT, idx int, v driver.Value) error {
 		sqltype = api.SQL_DOUBLE
 		size = 8
 	case time.Time:
-		ctype = api.SQL_C_TYPE_TIMESTAMP
-		y, m, day := d.Date()
-		b := api.SQL_TIMESTAMP_STRUCT{
-			Year:     api.SQLSMALLINT(y),
-			Month:    api.SQLUSMALLINT(m),
-			Day:      api.SQLUSMALLINT(day),
-			Hour:     api.SQLUSMALLINT(d.Hour()),
-			Minute:   api.SQLUSMALLINT(d.Minute()),
-			Second:   api.SQLUSMALLINT(d.Second()),
-			Fraction: api.SQLUINTEGER(d.Nanosecond()),
-		}
-		p.Data = &b
-		buf = unsafe.Pointer(&b)
 		sqltype = api.SQL_TYPE_TIMESTAMP
-		if p.isDescribed && p.SQLType == api.SQL_TYPE_TIMESTAMP {
-			decimal = p.Decimal
+		ctype = api.SQL_C_WCHAR
+		b := api.StringToUTF16(d.Format("2006-01-02 15:04:05.0000000"))
+		p.Data = b
+		buf = unsafe.Pointer(&b[0])
+		l := len(b)
+		l -= 1 // remove terminating 0
+		size = api.SQLULEN(l)
+		if size < 1 {
+			// size cannot be less then 1 even for empty fields
+			size = 1
 		}
-		if decimal <= 0 {
-			// represented as yyyy-mm-dd hh:mm:ss.fff format in ms sql server
-			decimal = 3
-		}
-		size = 20 + api.SQLULEN(decimal)
+		l *= 2 // every char takes 2 bytes
+		buflen = api.SQLLEN(l)
+		plen = p.StoreStrLen_or_IndPtr(buflen)
+		decimal = 7
 	case []byte:
 		ctype = api.SQL_C_BINARY
 		b := make([]byte, len(d))

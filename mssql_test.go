@@ -14,7 +14,6 @@ import (
 	"io"
 	"net"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -160,52 +159,22 @@ func isProto2008OrLater(db *sql.DB) (bool, error) {
 }
 
 // as per http://www.mssqltips.com/sqlservertip/2563/understanding-the-sql-server-select-version-command/
-func serverVersion(db *sql.DB) (sqlVersion, sqlPartNumber, osVersion string, err error) {
-	var v string
-	if err = db.QueryRow("select @@version").Scan(&v); err != nil {
-		return "", "", "", err
+func serverVersion(db *sql.DB) (sqlVersion int, err error) {
+	var v int
+	if err = db.QueryRow("SELECT @@MICROSOFTVERSION  / 0x01000000").Scan(&v); err != nil {
+		return -1, err
 	}
-	a := strings.SplitN(v, "\n", -1)
-	if len(a) < 4 {
-		return "", "", "", errors.New("SQL Server version string must have at least 4 lines: " + v)
-	}
-	for i := range a {
-		a[i] = strings.Trim(a[i], " \t")
-	}
-	l1 := strings.SplitN(a[0], "-", -1)
-	if len(l1) != 2 {
-		return "", "", "", errors.New("SQL Server version first line must have - in it: " + v)
-	}
-	i := strings.Index(a[3], " on ")
-	if i < 0 {
-		return "", "", "", errors.New("SQL Server version fourth line must have 'on' in it: " + v)
-	}
-	sqlVersion = l1[0] + a[3][:i]
-	osVersion = a[3][i+4:]
-	sqlPartNumber = strings.Trim(l1[1], " ")
-	l12 := strings.SplitN(sqlPartNumber, " ", -1)
-	if len(l12) < 2 {
-		return "", "", "", errors.New("SQL Server version first line must have space after part number in it: " + v)
-	}
-	sqlPartNumber = l12[0]
-	return sqlVersion, sqlPartNumber, osVersion, nil
+
+	return v, nil
 }
 
 // as per http://www.mssqltips.com/sqlservertip/2563/understanding-the-sql-server-select-version-command/
 func isSrv2008OrLater(db *sql.DB) (bool, error) {
-	_, sqlPartNumber, _, err := serverVersion(db)
+	sqlVersion, err := serverVersion(db)
 	if err != nil {
 		return false, err
 	}
-	a := strings.SplitN(sqlPartNumber, ".", -1)
-	if len(a) != 4 {
-		return false, errors.New("SQL Server part number must have 4 numbers in it: " + sqlPartNumber)
-	}
-	n, err := strconv.ParseInt(a[0], 10, 0)
-	if err != nil {
-		return false, errors.New("SQL Server invalid part number: " + sqlPartNumber)
-	}
-	return n >= 10, nil
+	return sqlVersion >= 10, nil
 }
 
 func is2008OrLater(db *sql.DB) bool {
@@ -1720,3 +1689,5 @@ func TestMSSQLMarkBeginBadConn(t *testing.T) {
 		testFn(next.label, next.fn)
 	}
 }
+
+
